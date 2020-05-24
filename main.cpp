@@ -218,6 +218,8 @@ struct HLD {
         dfs(0, -1);
     }
 
+    HLD() {}
+
     int lca(int u, int v) {
         while (way[u] != way[v]) {
             if (depth[high[way[u]]] > depth[high[way[v]]]) // u is now higher
@@ -241,7 +243,7 @@ struct HLD {
             }
             from = high[wind];
             if (dst >= tree.edges[tree.parent_edge[from]].weight) {
-                dst -=  tree.edges[tree.parent_edge[from]].weight;
+                dst -= tree.edges[tree.parent_edge[from]].weight;
             } else {
                 break;
             }
@@ -263,7 +265,7 @@ struct HLD {
         return ret;
     }
 
-    int move_down(int from, int to, ll & dst) {
+    int move_down(int from, int to, ll &dst) {
         vector<int> highs;
         int v = to;
         while (way[from] != way[v]) {
@@ -292,7 +294,7 @@ struct HLD {
             highs.pop_back();
         }
         int r = lf[way[v]] + ind[v];
-        int l = way[v] == way[to] ? lf[way[to]] + ind[to] - 1: lf[way[v]] + ind[tree.parent[highs.back()]] - 1;
+        int l = way[v] == way[to] ? lf[way[to]] + ind[to] - 1 : lf[way[v]] + ind[tree.parent[highs.back()]] - 1;
         while (r - l > 1) {
             int m = r + l >> 1;
             if (dist[anti_ind[m]] - dist[v] <= dst) {
@@ -306,11 +308,11 @@ struct HLD {
         return ret;
     }
 
-    int move_dist(int from, int to, ll dst) {
+    int move_by_dist(int from, int to, ll dst) {
         int par = lca(from, to);
         int ans = move_up(from, par, dst);
         if (ans == par)
-            move_down(par, to, dst);
+            ans = move_down(par, to, dst);
         return ans;
     }
 
@@ -367,6 +369,47 @@ struct HLD {
         return ret;
     }
 
+};
+
+struct KServers {
+    HLD hld;
+    vector<int> positions;
+
+    KServers(vector<Edge> edges, vector<int> positions) {
+        hld = HLD(Tree(edges));
+        this->positions = positions;
+    }
+
+    int serve(int query) {
+        int k = positions.size();
+        vector<int> servers(k);
+        for (int i = 0; i < k; ++i) {
+            servers[i] = i;
+        }
+        sort(servers.begin(), servers.end(), [&](int s1, int s2) -> bool {
+            int d1 = hld.get_dist(positions[s1], query);
+            int d2 = hld.get_dist(positions[s2], query);
+            return d1 < d2 || (d1 == d2 && s1 < s2);
+        });
+
+        vector<int> old_positions = positions;
+
+        hld.color(positions[servers[0]], query, positions[servers[0]]);
+        positions[servers[0]] = query;
+        for (int i = 1; i < k; ++i) {
+            int v = positions[servers[i]];
+            pii br = hld.find_color(v, query);
+            int u = hld.move_by_dist(v, query, hld.get_dist(br.first, br.second));
+            hld.color(u, v, v);
+            positions[servers[i]] = u;
+        }
+
+        for (auto v : old_positions) {
+            hld.color(v, query, 0);
+        }
+
+        return servers[0];
+    }
 };
 
 void test_segment_tree() {
@@ -465,27 +508,111 @@ void test_coloring() {
 }
 
 void test_moving() {
-    Tree tree({{0, 2, 1},
-               {0, 3, 1},
-               {2, 4, 1},
-               {2, 5, 1},
-               {4, 8, 1},
-               {4, 9, 1},
+    Tree tree({{0, 2,  1},
+               {0, 3,  1},
+               {2, 4,  1},
+               {2, 5,  1},
+               {4, 8,  1},
+               {4, 9,  1},
                {8, 10, 1},
                {9, 11, 1},
                {9, 12, 1},
-               {3, 6, 1},
-               {3, 7, 1},
+               {3, 6,  1},
+               {3, 7,  1},
                {6, 13, 1},
                {7, 14, 1},
-               {7, 1, 1}});
+               {7, 1,  1}});
     HLD hld(tree);
 
+    assert(hld.move_by_dist(0, 1, 1) == 3);
+    assert(hld.move_by_dist(5, 11, 3) == 9);
+    assert(hld.move_by_dist(8, 6, 2) == 2);
+    assert(hld.move_by_dist(14, 14, 0) == 14);
+
+    tree = Tree({{0, 2,  2},
+                 {0, 3,  2},
+                 {2, 4,  2},
+                 {2, 5,  2},
+                 {4, 8,  2},
+                 {4, 9,  2},
+                 {8, 10, 2},
+                 {9, 11, 2},
+                 {9, 12, 2},
+                 {3, 6,  2},
+                 {3, 7,  2},
+                 {6, 13, 2},
+                 {7, 14, 2},
+                 {7, 1,  2}});
+    hld = HLD(tree);
+
+    assert(hld.move_by_dist(8, 12, 4) == 9);
+    assert(hld.move_by_dist(8, 12, 3) == 4);
+    assert(hld.move_by_dist(2, 10, 5) == 8);
+    assert(hld.move_by_dist(12, 14, 9) == 0);
+    assert(hld.move_by_dist(12, 14, 11) == 3);
+    assert(hld.move_by_dist(12, 14, 13) == 7);
+
+
+    cout << "test_moving completed succesfully" << endl;
 }
 
+void test_kservers() {
 
-int main() {
+    KServers kServers({{0, 2,  1},
+                       {0, 3,  1},
+                       {2, 4,  1},
+                       {2, 5,  1},
+                       {4, 8,  1},
+                       {4, 9,  1},
+                       {8, 10, 1},
+                       {9, 11, 1},
+                       {9, 12, 1},
+                       {3, 6,  1},
+                       {3, 7,  1},
+                       {6, 13, 1},
+                       {7, 14, 1},
+                       {7, 1,  1}},
+                      {0});
+
+    for (int i = 0; i < 15; ++i) {
+        kServers.serve(i);
+        assert(kServers.positions[0] == i);
+    }
+
+    kServers = KServers({{0, 2,  1},
+                         {0, 3,  1},
+                         {2, 4,  1},
+                         {2, 5,  1},
+                         {4, 8,  1},
+                         {4, 9,  1},
+                         {8, 10, 1},
+                         {9, 11, 1},
+                         {9, 12, 1},
+                         {3, 6,  1},
+                         {3, 7,  1},
+                         {6, 13, 1},
+                         {7, 14, 1},
+                         {7, 1,  1}},
+                        {13, 14});
+
+    assert(kServers.serve(7) == 1);
+    assert(kServers.positions[1] == 7);
+    assert(kServers.serve(14) == 1);
+    assert(kServers.serve(3) == 0);
+    watch(kServers.positions[1]);
+    assert(kServers.positions[0] == 3);
+    assert(kServers.positions[1] == 7);
+    cout << "test_kservers completed succesfully" << endl;
+}
+
+void testing() {
     test_segment_tree();
     test_lca();
     test_coloring();
+    test_moving();
+    test_kservers();
+}
+
+int main() {
+    testing();
 }
