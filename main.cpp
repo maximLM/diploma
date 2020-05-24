@@ -7,6 +7,7 @@ using namespace std;
 typedef long long ll;
 typedef pair<int, int> pii;
 
+const ll oo = 1e9 + 10;
 
 struct Edge {
     int from, to, weight;
@@ -42,7 +43,7 @@ struct Tree {
         dfs(0);
     }
 
-    Tree() { }
+    Tree() {}
 
 };
 
@@ -224,15 +225,25 @@ struct HLD {
         return depth[u] > depth[v] ? v : u;
     }
 
-//    ll get_dist(int u, int v) {
-//        return dist[u] + dist[v] - dist[lca(u, v)] * 2;
-//    }
-//
-//    int move_dist(int from, int to, ll dst) {
-//        int par = lca(from, to);
-//        move_up(from, par, dst);
-//        move_down(par)
-//    }
+    ll get_dist(int u, int v) {
+        return dist[u] + dist[v] - dist[lca(u, v)] * 2;
+    }
+
+    void move_up(int from, int to, ll &dst, int &ans) {
+        while (dst && way[from] != way[to]) {
+            int wind = way[from];
+            if (dst >=)
+        }
+    }
+
+    int move_dist(int from, int to, ll dst) {
+        int par = lca(from, to);
+        int ans = lf[way[from]] + ind[from];
+        move_up(from, par, dst, ans);
+        move_down(par, to, dst, ans);
+        ans = anti_ind[ans];
+        return ans;
+    }
 
     void color(int u, int v, int col) {
         while (way[u] != way[v]) {
@@ -288,7 +299,6 @@ struct HLD {
     }
 
 
-
 };
 
 void test_segment_tree() {
@@ -311,14 +321,30 @@ void test_segment_tree() {
 }
 
 void test_lca() {
-    Tree tree({{0, 1}, {1, 2}, {2, 3}, {3, 4}});
+    Tree tree({{0, 1},
+               {1, 2},
+               {2, 3},
+               {3, 4}});
     HLD hld(tree);
 
     assert(hld.lca(0, 3) == 0);
     assert(hld.lca(4, 2) == 2);
     assert(hld.lca(4, 4) == 4);
 
-    tree = Tree({{0, 2}, {0, 3}, {2, 4}, {2, 5}, {4, 8}, {4, 9}, {8, 10}, {9, 11}, {9, 12}, {3, 6}, {3, 7}, {6, 13}, {7, 14}, {7, 1}});
+    tree = Tree({{0, 2},
+                 {0, 3},
+                 {2, 4},
+                 {2, 5},
+                 {4, 8},
+                 {4, 9},
+                 {8, 10},
+                 {9, 11},
+                 {9, 12},
+                 {3, 6},
+                 {3, 7},
+                 {6, 13},
+                 {7, 14},
+                 {7, 1}});
 
     hld = HLD(tree);
 
@@ -334,7 +360,20 @@ void test_lca() {
 }
 
 void test_coloring() {
-    Tree tree({{0, 2}, {0, 3}, {2, 4}, {2, 5}, {4, 8}, {4, 9}, {8, 10}, {9, 11}, {9, 12}, {3, 6}, {3, 7}, {6, 13}, {7, 14}, {7, 1}});
+    Tree tree({{0, 2},
+               {0, 3},
+               {2, 4},
+               {2, 5},
+               {4, 8},
+               {4, 9},
+               {8, 10},
+               {9, 11},
+               {9, 12},
+               {3, 6},
+               {3, 7},
+               {6, 13},
+               {7, 14},
+               {7, 1}});
     HLD hld(tree);
 
     hld.color(10, 1, 2);
@@ -356,7 +395,6 @@ void test_coloring() {
 
     cout << "test_coloring completed succesfully" << endl;
 }
-
 
 int main() {
     test_segment_tree();
