@@ -17,7 +17,7 @@ struct Tree {
     int n;
     vector<Edge> edges;
     vector<vector<int>> g;
-    vector<int> parent;
+    vector<int> parent, parent_edge;
 
     void dfs(int v, int par = -1) {
         parent[v] = par;
@@ -25,6 +25,7 @@ struct Tree {
             int to = edges[id].to;
             if (to == par)
                 continue;
+            parent_edge[to] = id;
             dfs(to, v);
         }
     }
@@ -33,6 +34,7 @@ struct Tree {
         n = eds.size() + 1;
         g.resize(n);
         parent.resize(n);
+        parent_edge.resize(n);
         for (auto e : eds) {
             g[e.from].push_back(edges.size());
             edges.push_back(e);
@@ -229,19 +231,86 @@ struct HLD {
         return dist[u] + dist[v] - dist[lca(u, v)] * 2;
     }
 
-    void move_up(int from, int to, ll &dst, int &ans) {
-        while (dst && way[from] != way[to]) {
+    int move_up(int from, int to, ll &dst) {
+        while (way[from] != way[to]) {
             int wind = way[from];
-            if (dst >=)
+            if (dst >= dist[from] - dist[high[wind]]) {
+                dst -= dist[from] - dist[high[wind]];
+            } else {
+                break;
+            }
+            from = high[wind];
+            if (dst >= tree.edges[tree.parent_edge[from]].weight) {
+                dst -=  tree.edges[tree.parent_edge[from]].weight;
+            } else {
+                break;
+            }
+            from = tree.parent[from];
         }
+        int wind = way[from];
+        int l = lf[wind] + ind[from];
+        int r = wind == way[to] ? lf[wind] + ind[to] + 1 : rf[wind] + 1;
+        while (r - l > 1) {
+            int m = r + l >> 1;
+            if (dist[from] - dist[anti_ind[m]] <= dst) {
+                l = m;
+            } else {
+                r = m;
+            }
+        }
+        int ret = anti_ind[l];
+        dst -= dist[from] - dist[ret];
+        return ret;
+    }
+
+    int move_down(int from, int to, ll & dst) {
+        vector<int> highs;
+        int v = to;
+        while (way[from] != way[v]) {
+            highs.push_back(high[way[v]]);
+            v = tree.parent[high[way[v]]];
+        }
+
+        v = from;
+        while (way[v] != way[to]) {
+            int nxt = highs.back();
+
+            int u = tree.parent[nxt];
+            if (dst >= dist[u] - dist[v]) {
+                dst -= dist[u] - dist[v];
+            } else {
+                break;
+            }
+            v = u;
+
+            if (dst >= tree.edges[tree.parent_edge[nxt]].weight) {
+                dst -= tree.edges[tree.parent_edge[nxt]].weight;
+            } else {
+                break;
+            }
+            v = nxt;
+            highs.pop_back();
+        }
+        int r = lf[way[v]] + ind[v];
+        int l = way[v] == way[to] ? lf[way[to]] + ind[to] - 1: lf[way[v]] + ind[tree.parent[highs.back()]] - 1;
+        while (r - l > 1) {
+            int m = r + l >> 1;
+            if (dist[anti_ind[m]] - dist[v] <= dst) {
+                r = m;
+            } else {
+                l = m;
+            }
+        }
+        int ret = anti_ind[r];
+        dst -= dist[ret] - dist[v];
+        return ret;
     }
 
     int move_dist(int from, int to, ll dst) {
         int par = lca(from, to);
-        int ans = lf[way[from]] + ind[from];
-        move_up(from, par, dst, ans);
-        move_down(par, to, dst, ans);
-        ans = anti_ind[ans];
+        int ans = move_up(from, par, dst);
+        if (ans == par)
+            move_down(par, to, dst);
         return ans;
     }
 
@@ -297,7 +366,6 @@ struct HLD {
         ret.first = anti_ind[ret.first];
         return ret;
     }
-
 
 };
 
@@ -395,6 +463,26 @@ void test_coloring() {
 
     cout << "test_coloring completed succesfully" << endl;
 }
+
+void test_moving() {
+    Tree tree({{0, 2, 1},
+               {0, 3, 1},
+               {2, 4, 1},
+               {2, 5, 1},
+               {4, 8, 1},
+               {4, 9, 1},
+               {8, 10, 1},
+               {9, 11, 1},
+               {9, 12, 1},
+               {3, 6, 1},
+               {3, 7, 1},
+               {6, 13, 1},
+               {7, 14, 1},
+               {7, 1, 1}});
+    HLD hld(tree);
+
+}
+
 
 int main() {
     test_segment_tree();
