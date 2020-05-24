@@ -4,6 +4,11 @@
 
 using namespace std;
 
+/*
+ * TODO: change binsearch in moving to make correct complexity
+ * TODO: change call std::sort to bucket sort to make correct complexity in naive
+ */
+
 typedef long long ll;
 typedef pair<int, int> pii;
 
@@ -412,6 +417,66 @@ struct KServers {
     }
 };
 
+struct Naive {
+    Tree tree;
+    vector<int> positions;
+    Naive(vector<Edge> edgs, vector<int> positions) {
+        this->positions = positions;
+        tree = Tree(edgs);
+    }
+
+    int serve(int query) {
+        int n = tree.n;
+        vector<int> dist(n);
+        vector<pii> closest(n);
+        vector<int> server(n, -1);
+        for (int i = 0; i < positions.size(); ++i) {
+            server[positions[i]] = i;
+        }
+
+        auto dfs = function<void(int, int)>();
+        dfs = [&] (int v, int par) -> void {
+            closest[v] = {oo, oo};
+            for (int id : tree.g[v]) {
+                int to = tree.edges[id].to;
+                if (to == par)
+                    continue;
+                dist[to] = dist[v] + tree.edges[id].weight;
+                dfs(to, v);
+                closest[v] = min(closest[v], closest[to]);
+            }
+            if (server[v] != -1)
+                closest[v] = {dist[v], server[v]};
+        };
+
+        dfs(query, -1);
+
+        auto dfs2 = function<void(int, int, ll, int)>();
+        dfs2 = [&] (int v, int par, ll dst, int cur_server) -> void {
+            if (closest[v].first == oo)
+                return;
+            if (cur_server == closest[v].second) {
+                dst = closest[v].first - dist[v];
+            } else {
+                if (closest[v].first - dist[v] <= dst) {
+                    cur_server = closest[v].second;
+                    dst = closest[v].first - dist[v];
+                    positions[cur_server] = v;
+                }
+            }
+            for (int id : tree.g[v]) {
+                int to = tree.edges[id].to;
+                if (to == par)
+                    continue;
+                dfs2(to, v, dst, cur_server);
+            }
+        };
+
+        dfs2(query, -1, oo, -1);
+        return closest[query].second;
+    }
+};
+
 void test_segment_tree() {
     int n = 10000;
     SegmentTree tree(n + 1);
@@ -605,7 +670,56 @@ void test_kservers() {
     cout << "test_kservers completed succesfully" << endl;
 }
 
-void testing() {
+void test_naive() {
+
+    Naive naive({{0, 2,  1},
+                 {0, 3,  1},
+                 {2, 4,  1},
+                 {2, 5,  1},
+                 {4, 8,  1},
+                 {4, 9,  1},
+                 {8, 10, 1},
+                 {9, 11, 1},
+                 {9, 12, 1},
+                 {3, 6,  1},
+                 {3, 7,  1},
+                 {6, 13, 1},
+                 {7, 14, 1},
+                 {7, 1,  1}},
+                {0});
+
+    for (int i = 0; i < 15; ++i) {
+        naive.serve(i);
+        assert(naive.positions[0] == i);
+    }
+
+    naive = Naive({{0, 2,  1},
+                   {0, 3,  1},
+                   {2, 4,  1},
+                   {2, 5,  1},
+                   {4, 8,  1},
+                   {4, 9,  1},
+                   {8, 10, 1},
+                   {9, 11, 1},
+                   {9, 12, 1},
+                   {3, 6,  1},
+                   {3, 7,  1},
+                   {6, 13, 1},
+                   {7, 14, 1},
+                   {7, 1,  1}},
+                  {13, 14});
+
+    assert(naive.serve(7) == 1);
+    assert(naive.positions[1] == 7);
+    assert(naive.serve(14) == 1);
+    assert(naive.serve(3) == 0);
+    watch(naive.positions[1]);
+    assert(naive.positions[0] == 3);
+    assert(naive.positions[1] == 7);
+    cout << "test_kservers completed succesfully" << endl;
+}
+
+void sample_testing() {
     test_segment_tree();
     test_lca();
     test_coloring();
@@ -613,6 +727,11 @@ void testing() {
     test_kservers();
 }
 
+void stress_testing() {
+//    TODO do
+}
+
 int main() {
-    testing();
+    sample_testing();
+//    stress_testing();
 }
