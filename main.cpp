@@ -39,7 +39,7 @@ struct Tree {
         n = eds.size() + 1;
         g.resize(n);
         parent.resize(n);
-        parent_edge.resize(n);
+        parent_edge.resize(n, -1);
         for (auto e : eds) {
             g[e.from].push_back(edges.size());
             edges.push_back(e);
@@ -420,6 +420,7 @@ struct KServers {
 struct Naive {
     Tree tree;
     vector<int> positions;
+
     Naive(vector<Edge> edgs, vector<int> positions) {
         this->positions = positions;
         tree = Tree(edgs);
@@ -435,7 +436,7 @@ struct Naive {
         }
 
         auto dfs = function<void(int, int)>();
-        dfs = [&] (int v, int par) -> void {
+        dfs = [&](int v, int par) -> void {
             closest[v] = {oo, oo};
             for (int id : tree.g[v]) {
                 int to = tree.edges[id].to;
@@ -452,7 +453,7 @@ struct Naive {
         dfs(query, -1);
 
         auto dfs2 = function<void(int, int, ll, int)>();
-        dfs2 = [&] (int v, int par, ll dst, int cur_server) -> void {
+        dfs2 = [&](int v, int par, ll dst, int cur_server) -> void {
             if (closest[v].first == oo)
                 return;
             if (cur_server == closest[v].second) {
@@ -461,7 +462,10 @@ struct Naive {
                 if (closest[v].first - dist[v] <= dst) {
                     cur_server = closest[v].second;
                     dst = closest[v].first - dist[v];
-                    positions[cur_server] = v;
+                    if (tree.parent_edge[v] != -1 && closest[v].first - dist[tree.parent[v]] <= dst)
+                        positions[cur_server] = tree.parent[v];
+                    else
+                        positions[cur_server] = v;
                 }
             }
             for (int id : tree.g[v]) {
@@ -728,10 +732,10 @@ void sample_testing() {
 }
 
 void stress_testing() {
-//    TODO do
+
 }
 
 int main() {
-    sample_testing();
-//    stress_testing();
+//    sample_testing();
+    stress_testing();
 }
