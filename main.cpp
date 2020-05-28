@@ -4,10 +4,7 @@
 
 using namespace std;
 
-/*
- * TODO: change binsearch in moving to make correct complexity
- * TODO: change call std::sort to bucket sort to make correct complexity in naive
- */
+
 
 typedef long long ll;
 typedef pair<int, int> pii;
@@ -304,13 +301,10 @@ struct ColoringHLD : HLD {
 
 struct MovingHLD : HLD {
 
-    SegmentTree segmentTree;
 
     MovingHLD() : HLD() {}
 
-    MovingHLD(Tree tree) : HLD(tree) {
-        segmentTree = SegmentTree(n);
-    }
+    MovingHLD(Tree tree) : HLD(tree) {}
 
     int move_up(int from, int to, ll &dst) {
         while (way[from] != way[to]) {
@@ -440,6 +434,49 @@ struct KServers {
         return servers[0];
     }
 };
+
+struct FasterKServers {
+    ColoringHLD coloringHld;
+    Tree tree;
+    vector<int> positions, tin;
+    vector<ll> dist;
+    int n;
+
+    int timer = 1;
+
+    void dfs(int v, int par = -1) {
+        tin[v] = timer++;
+        for (int to : tree.g[v]) {
+            if (to == par)
+                continue;
+            dfs(to, v);
+        }
+    }
+
+    FasterKServers(vector<Edge> edges, vector<int> positions) {
+        tree = Tree(edges);
+        coloringHld = ColoringHLD(tree);
+        this->positions = positions;
+        n = coloringHld.n;
+
+        dist.resize(n);
+        tin.resize(n);
+
+        dfs(0);
+    }
+
+    int serve(int query) {
+        vector<int> verts = positions;
+        verts.push_back(query);
+        sort(verts.begin(), verts.end());
+        verts.resize(unique(verts.begin(), verts.end()) - verts.begin());
+
+
+    }
+
+
+};
+
 
 struct Naive {
     Tree tree;
@@ -793,3 +830,5 @@ int main() {
 //    sample_testing();
     stress_testing();
 }
+
+// TODO: usual auxiliary tree than dfs from query -> u have your pretty aux tree
