@@ -322,6 +322,7 @@ struct HLD {
     }
 
     void color(int u, int v, int col) {
+        col++;
         while (way[u] != way[v]) {
             if (depth[high[way[u]]] > depth[high[way[v]]]) // u is now higher
                 swap(u, v);
@@ -339,7 +340,7 @@ struct HLD {
         while (way[from] != way[to]) {
             int wind = way[from];
             pii cur = segmentTree.get_left(lf[wind] + ind[from], rf[wind]);
-            if (cur.first)
+            if (cur.second)
                 return cur;
             from = tree.parent[high[wind]];
         }
@@ -352,14 +353,14 @@ struct HLD {
         while (way[to] != way[from]) {
             int wind = way[to];
             pii cur = segmentTree.get_right(lf[wind] + ind[to], rf[wind]);
-            if (cur.first)
+            if (cur.second)
                 ret = cur;
             to = tree.parent[high[wind]];
         }
 
         int wind = way[to];
-        pii cur = segmentTree.get_right(lf[wind] + ind[to], lf[wind] + way[from]);
-        if (cur.first)
+        pii cur = segmentTree.get_right(lf[wind] + ind[to], lf[wind] + ind[from]);
+        if (cur.second)
             ret = cur;
         return ret;
     }
@@ -367,9 +368,10 @@ struct HLD {
     pii find_color(int from, int to) {
         int par = lca(from, to);
         pii ret = find_up(from, par);
-        if (!ret.first)
+        if (!ret.second)
             ret = find_down(par, to);
-        assert(ret.first);
+        assert(ret.second);
+        ret.second--;
         ret.first = anti_ind[ret.first];
         return ret;
     }
@@ -410,7 +412,7 @@ struct KServers {
         }
 
         for (auto v : old_positions) {
-            hld.color(v, query, 0);
+            hld.color(v, query, -1);
         }
 
         return servers[0];
@@ -431,7 +433,7 @@ struct Naive {
         vector<int> dist(n);
         vector<pii> closest(n);
         vector<int> server(n, -1);
-        for (int i = 0; i < positions.size(); ++i) {
+        for (int i = ((int) positions.size()) - 1; i >= 0; --i) {
             server[positions[i]] = i;
         }
 
@@ -461,11 +463,11 @@ struct Naive {
             } else {
                 if (closest[v].first - dist[v] <= dst) {
                     cur_server = closest[v].second;
-                    dst = closest[v].first - dist[v];
-                    if (tree.parent_edge[v] != -1 && closest[v].first - dist[tree.parent[v]] <= dst)
-                        positions[cur_server] = tree.parent[v];
+                    if (v != query && closest[v].first - dist[par] <= dst)
+                        positions[cur_server] = par;
                     else
                         positions[cur_server] = v;
+                    dst = closest[v].first - dist[v];
                 }
             }
             for (int id : tree.g[v]) {
@@ -732,7 +734,36 @@ void sample_testing() {
 }
 
 void stress_testing() {
+    int cnt = -1;
+    while (true) {
+        if (++cnt % 20 == 0)
+            watch(cnt);
+        int n = 2 + rand() % 10;
+        vector<Edge> edgs;
+        for (int i = 1; i < n; ++i) {
+            int par = rand() % i;
+            edgs.push_back({par, i, 1 + rand() % 10});
+        }
+        int k = 2 + rand() % (n - 1);
+        vector<int> servers(n);
+        for (int i = 0; i < n; ++i) {
+            servers[i] = i;
+        }
+        random_shuffle(servers.begin(), servers.end());
+        servers.resize(k);
 
+        Naive naive(edgs, servers);
+        KServers kServers(edgs, servers);
+
+        int q = 1 + rand() % 10;
+        for (int it = 0; it < q; ++it) {
+            watch(cnt);
+            watch(it);
+            int query = rand() % n;
+            assert(naive.serve(query) == kServers.serve(query));
+            assert(naive.positions == kServers.positions);
+        }
+    }
 }
 
 int main() {
