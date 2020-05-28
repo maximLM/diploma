@@ -141,7 +141,6 @@ public:
 
 struct HLD {
     Tree tree;
-    SegmentTree segmentTree;
     int n, szway = 0, sztree = 0;
     vector<int> way, lf, rf, ind, high, depth, anti_ind;
     vector<ll> dist;
@@ -209,7 +208,6 @@ struct HLD {
     HLD(Tree t) {
         tree = t;
         n = t.n;
-        segmentTree = SegmentTree(n);
         way.resize(n, 0);
         lf.resize(n, 0);
         rf.resize(n, 0);
@@ -236,6 +234,82 @@ struct HLD {
 
     ll get_dist(int u, int v) {
         return dist[u] + dist[v] - dist[lca(u, v)] * 2;
+    }
+
+};
+
+struct ColoringHLD : HLD {
+
+    SegmentTree segmentTree;
+
+    ColoringHLD() : HLD() {}
+
+    ColoringHLD(Tree tree) : HLD(tree) {
+        segmentTree = SegmentTree(n);
+    }
+
+    void color(int u, int v, int col) {
+        while (way[u] != way[v]) {
+            if (depth[high[way[u]]] > depth[high[way[v]]]) // u is now higher
+                swap(u, v);
+            int wind = way[v];
+            segmentTree.upd(lf[wind] + ind[v], rf[wind], col);
+            v = tree.parent[high[wind]];
+        }
+        if (depth[u] > depth[v]) // u is now higher
+            swap(u, v);
+        int wind = way[v];
+        segmentTree.upd(lf[wind] + ind[v], lf[wind] + ind[u], col);
+    }
+
+    pii find_up(int from, int to) {
+        while (way[from] != way[to]) {
+            int wind = way[from];
+            pii cur = segmentTree.get_left(lf[wind] + ind[from], rf[wind]);
+            if (cur.second)
+                return cur;
+            from = tree.parent[high[wind]];
+        }
+        int wind = way[from];
+        return segmentTree.get_left(lf[wind] + ind[from], lf[wind] + ind[to]);
+    }
+
+    pii find_down(int from, int to) {
+        pii ret = {0, 0};
+        while (way[to] != way[from]) {
+            int wind = way[to];
+            pii cur = segmentTree.get_right(lf[wind] + ind[to], rf[wind]);
+            if (cur.second)
+                ret = cur;
+            to = tree.parent[high[wind]];
+        }
+
+        int wind = way[to];
+        pii cur = segmentTree.get_right(lf[wind] + ind[to], lf[wind] + ind[from]);
+        if (cur.second)
+            ret = cur;
+        return ret;
+    }
+
+    pii find_color(int from, int to) {
+        int par = lca(from, to);
+        pii ret = find_up(from, par);
+        if (!ret.second)
+            ret = find_down(par, to);
+        assert(ret.second);
+        ret.first = anti_ind[ret.first];
+        return ret;
+    }
+};
+
+struct MovingHLD : HLD {
+
+    SegmentTree segmentTree;
+
+    MovingHLD() : HLD() {}
+
+    MovingHLD(Tree tree) : HLD(tree) {
+        segmentTree = SegmentTree(n);
     }
 
     int move_up(int from, int to, ll &dst) {
@@ -321,69 +395,16 @@ struct HLD {
         return ans;
     }
 
-    void color(int u, int v, int col) {
-        col++;
-        while (way[u] != way[v]) {
-            if (depth[high[way[u]]] > depth[high[way[v]]]) // u is now higher
-                swap(u, v);
-            int wind = way[v];
-            segmentTree.upd(lf[wind] + ind[v], rf[wind], col);
-            v = tree.parent[high[wind]];
-        }
-        if (depth[u] > depth[v]) // u is now higher
-            swap(u, v);
-        int wind = way[v];
-        segmentTree.upd(lf[wind] + ind[v], lf[wind] + ind[u], col);
-    }
-
-    pii find_up(int from, int to) {
-        while (way[from] != way[to]) {
-            int wind = way[from];
-            pii cur = segmentTree.get_left(lf[wind] + ind[from], rf[wind]);
-            if (cur.second)
-                return cur;
-            from = tree.parent[high[wind]];
-        }
-        int wind = way[from];
-        return segmentTree.get_left(lf[wind] + ind[from], lf[wind] + ind[to]);
-    }
-
-    pii find_down(int from, int to) {
-        pii ret = {0, 0};
-        while (way[to] != way[from]) {
-            int wind = way[to];
-            pii cur = segmentTree.get_right(lf[wind] + ind[to], rf[wind]);
-            if (cur.second)
-                ret = cur;
-            to = tree.parent[high[wind]];
-        }
-
-        int wind = way[to];
-        pii cur = segmentTree.get_right(lf[wind] + ind[to], lf[wind] + ind[from]);
-        if (cur.second)
-            ret = cur;
-        return ret;
-    }
-
-    pii find_color(int from, int to) {
-        int par = lca(from, to);
-        pii ret = find_up(from, par);
-        if (!ret.second)
-            ret = find_down(par, to);
-        assert(ret.second);
-        ret.second--;
-        ret.first = anti_ind[ret.first];
-        return ret;
-    }
-
 };
 
 struct KServers {
-    HLD hld;
+    ColoringHLD coloringHld;
+    MovingHLD movingHld;
     vector<int> positions;
 
     KServers(vector<Edge> edges, vector<int> positions) {
-        hld = HLD(Tree(edges));
+        coloringHld = ColoringHLD(Tree(edges));
+        movingHld = MovingHLD(Tree(edges));
         this->positions = positions;
     }
 
@@ -394,25 +415,26 @@ struct KServers {
             servers[i] = i;
         }
         sort(servers.begin(), servers.end(), [&](int s1, int s2) -> bool {
-            int d1 = hld.get_dist(positions[s1], query);
-            int d2 = hld.get_dist(positions[s2], query);
+            int d1 = coloringHld.get_dist(positions[s1], query);
+            int d2 = coloringHld.get_dist(positions[s2], query);
             return d1 < d2 || (d1 == d2 && s1 < s2);
         });
 
         vector<int> old_positions = positions;
 
-        hld.color(positions[servers[0]], query, positions[servers[0]]);
+        coloringHld.color(positions[servers[0]], query, positions[servers[0]] + 1);
         positions[servers[0]] = query;
         for (int i = 1; i < k; ++i) {
             int v = positions[servers[i]];
-            pii br = hld.find_color(v, query);
-            int u = hld.move_by_dist(v, query, hld.get_dist(br.first, br.second));
-            hld.color(u, v, v);
+            pii br = coloringHld.find_color(v, query);
+            br.second--;
+            int u = movingHld.move_by_dist(v, query, coloringHld.get_dist(br.first, br.second));
+            coloringHld.color(u, v, v + 1);
             positions[servers[i]] = u;
         }
 
         for (auto v : old_positions) {
-            hld.color(v, query, -1);
+            coloringHld.color(v, query, 0);
         }
 
         return servers[0];
@@ -482,6 +504,7 @@ struct Naive {
         return closest[query].second;
     }
 };
+
 
 void test_segment_tree() {
     int n = 10000;
@@ -556,7 +579,7 @@ void test_coloring() {
                {6, 13},
                {7, 14},
                {7, 1}});
-    HLD hld(tree);
+    ColoringHLD hld(tree);
 
     hld.color(10, 1, 2);
     assert(hld.find_color(12, 5) == make_pair(4, 2));
@@ -593,7 +616,7 @@ void test_moving() {
                {6, 13, 1},
                {7, 14, 1},
                {7, 1,  1}});
-    HLD hld(tree);
+    MovingHLD hld(tree);
 
     assert(hld.move_by_dist(0, 1, 1) == 3);
     assert(hld.move_by_dist(5, 11, 3) == 9);
@@ -614,7 +637,7 @@ void test_moving() {
                  {6, 13, 2},
                  {7, 14, 2},
                  {7, 1,  2}});
-    hld = HLD(tree);
+    hld = MovingHLD(tree);
 
     assert(hld.move_by_dist(8, 12, 4) == 9);
     assert(hld.move_by_dist(8, 12, 3) == 4);
@@ -736,13 +759,13 @@ void sample_testing() {
 void stress_testing() {
     int cnt = -1;
     while (true) {
-        if (++cnt % 20 == 0)
+        if (++cnt % 100 == 0)
             watch(cnt);
-        int n = 2 + rand() % 10;
+        int n = 2 + rand() % 100;
         vector<Edge> edgs;
         for (int i = 1; i < n; ++i) {
             int par = rand() % i;
-            edgs.push_back({par, i, 1 + rand() % 10});
+            edgs.push_back({par, i, 1 + rand() % 100});
         }
         int k = 2 + rand() % (n - 1);
         vector<int> servers(n);
@@ -755,10 +778,10 @@ void stress_testing() {
         Naive naive(edgs, servers);
         KServers kServers(edgs, servers);
 
-        int q = 1 + rand() % 10;
+        int q = 1 + rand() % 100;
         for (int it = 0; it < q; ++it) {
-            watch(cnt);
-            watch(it);
+//            watch(cnt);
+//            watch(it);
             int query = rand() % n;
             assert(naive.serve(query) == kServers.serve(query));
             assert(naive.positions == kServers.positions);
