@@ -12,7 +12,8 @@ typedef pair<int, int> pii;
 const ll oo = 1e9 + 10;
 
 struct Edge {
-    int from, to, weight;
+    int from, to;
+    ll weight;
 };
 
 struct Tree {
@@ -20,6 +21,7 @@ struct Tree {
     vector<Edge> edges;
     vector<vector<int>> g;
     vector<int> parent, parent_edge;
+    int root;
 
     void dfs(int v, int par = -1) {
         parent[v] = par;
@@ -32,7 +34,8 @@ struct Tree {
         }
     }
 
-    Tree(vector<Edge> eds) {
+    Tree(vector<Edge> eds, int rt = 0) {
+        root = rt;
         n = eds.size() + 1;
         g.resize(n);
         parent.resize(n);
@@ -44,7 +47,7 @@ struct Tree {
             g[e.from].push_back(edges.size());
             edges.push_back(e);
         }
-        dfs(0);
+        dfs(root);
     }
 
     Tree() {}
@@ -435,49 +438,6 @@ struct KServers {
     }
 };
 
-struct FasterKServers {
-    ColoringHLD coloringHld;
-    Tree tree;
-    vector<int> positions, tin;
-    vector<ll> dist;
-    int n;
-
-    int timer = 1;
-
-    void dfs(int v, int par = -1) {
-        tin[v] = timer++;
-        for (int to : tree.g[v]) {
-            if (to == par)
-                continue;
-            dfs(to, v);
-        }
-    }
-
-    FasterKServers(vector<Edge> edges, vector<int> positions) {
-        tree = Tree(edges);
-        coloringHld = ColoringHLD(tree);
-        this->positions = positions;
-        n = coloringHld.n;
-
-        dist.resize(n);
-        tin.resize(n);
-
-        dfs(0);
-    }
-
-    int serve(int query) {
-        vector<int> verts = positions;
-        verts.push_back(query);
-        sort(verts.begin(), verts.end());
-        verts.resize(unique(verts.begin(), verts.end()) - verts.begin());
-
-
-    }
-
-
-};
-
-
 struct Naive {
     Tree tree;
     vector<int> positions;
@@ -542,6 +502,146 @@ struct Naive {
     }
 };
 
+struct FasterKServers {
+    MovingHLD movingHld;
+    Tree tree;
+    vector<int> positions, tin, tout, server;
+    vector<vector<int>> g;
+    vector<ll> dist;
+    vector<pair<ll, int>> closest;
+    int n;
+
+    int timer = 1;
+
+    void dfs(int v, int par = -1) {
+        tin[v] = timer++;
+        tout[v] = tin[v];
+        for (int id : tree.g[v]) {
+            int to = tree.edges[id].to;
+            if (to == par)
+                continue;
+            dfs(to, v);
+            tout[v] = tout[to];
+        }
+    }
+
+    FasterKServers(vector<Edge> edges, vector<int> positions) {
+        tree = Tree(edges);
+        movingHld = MovingHLD(tree);
+        this->positions = positions;
+        n = tree.n;
+
+        dist.resize(n);
+        tin.resize(n);
+        tout.resize(n);
+        g.resize(n);
+        closest.resize(n);
+        server.resize(n, -1);
+
+        dfs(0);
+    }
+
+    bool is_parent(int u, int v) {
+        return tin[u] <= tin[v] && tin[v] <= tout[u];
+    }
+
+    int serve(int query) {
+        for (int i = ((int) positions.size()) - 1; i >= 0; --i) {
+            server[positions[i]] = i;
+        }
+        vector<int> verts = positions;
+        verts.push_back(query);
+        auto cmp_less = [&] (int v1, int v2) -> bool {
+            return tin[v1] < tin[v2];
+        };
+        auto cmp_equal = [&] (int v1, int v2) -> bool {
+            return tin[v1] == tin[v2];
+        };
+        sort(verts.begin(), verts.end(), cmp_less);
+        verts.resize(unique(verts.begin(), verts.end(), cmp_equal) - verts.begin());
+
+        vector<int> tmp = verts;
+        for (int i = 1; i < verts.size(); ++i) {
+            tmp.push_back(movingHld.lca(verts[i - 1], verts[i]));
+        }
+
+        verts = tmp;
+        sort(verts.begin(), verts.end(), cmp_less);
+        verts.resize(unique(verts.begin(), verts.end(), cmp_equal) - verts.begin());
+
+        vector<int> stack;
+        vector<Edge> edges;
+
+        for (auto v : verts) {
+            while (!stack.empty() && !is_parent(stack.back(), v)) {
+                stack.pop_back();
+            }
+            if (!stack.empty()) {
+                g[stack.back()].push_back(edges.size());
+                ll len = movingHld.get_dist(stack.back(), v);
+                edges.push_back({stack.back(), v, len});
+                g[v].push_back(edges.size());
+                edges.push_back({v, stack.back(), len});
+            }
+            stack.push_back(v);
+        }
+
+        auto dfs = function<void(int, int)>();
+        dfs = [&] (int v, int par) -> void {
+            closest[v] = {oo, oo};
+            for (int id : g[v]) {
+                int to = edges[id].to;
+                if (to == par)
+                    continue;
+                dist[to] = dist[v] + edges[id].weight;
+                dfs(to, v);
+                closest[v] = min(closest[v], closest[to]);
+            }
+            if (server[v] != -1) {
+                closest[v] = {dist[v], server[v]};
+            }
+        };
+        dist[query] = 0;
+        dfs(query, -1);
+
+        auto dfs2 = function<void(int, int, ll, int)>();
+        dfs2 = [&](int v, int par, ll dst, int cur_server) -> void {
+            if (closest[v].first == oo)
+                return;
+            if (cur_server == closest[v].second) {
+                dst = closest[v].first - dist[v];
+            } else {
+                if (closest[v].first - dist[v] <= dst) {
+                    cur_server = closest[v].second;
+                    if (v != query) {
+                        dst -= closest[v].first - dist[v];
+                        positions[cur_server] = movingHld.move_by_dist(v, query, dst);
+                    } else {
+                        positions[cur_server] = v;
+                    }
+                    dst = closest[v].first - dist[v];
+                }
+            }
+            for (int id : g[v]) {
+                int to = edges[id].to;
+                if (to == par)
+                    continue;
+                dfs2(to, v, dst, cur_server);
+            }
+        };
+
+        dfs2(query, -1, oo, -1);
+        int ret = closest[query].second;
+        for (auto v : verts) {
+            server[v] = -1;
+            g[v].clear();
+        }
+
+        return ret;
+    }
+
+
+};
 
 void test_segment_tree() {
     int n = 10000;
@@ -782,7 +882,56 @@ void test_naive() {
     watch(naive.positions[1]);
     assert(naive.positions[0] == 3);
     assert(naive.positions[1] == 7);
-    cout << "test_kservers completed succesfully" << endl;
+    cout << "test_naive completed succesfully" << endl;
+}
+
+void test_faster() {
+
+    FasterKServers fasterKServers({{0, 2,  1},
+                                   {0, 3,  1},
+                                   {2, 4,  1},
+                                   {2, 5,  1},
+                                   {4, 8,  1},
+                                   {4, 9,  1},
+                                   {8, 10, 1},
+                                   {9, 11, 1},
+                                   {9, 12, 1},
+                                   {3, 6,  1},
+                                   {3, 7,  1},
+                                   {6, 13, 1},
+                                   {7, 14, 1},
+                                   {7, 1,  1}},
+                                  {0});
+
+    for (int i = 0; i < 15; ++i) {
+        fasterKServers.serve(i);
+        assert(fasterKServers.positions[0] == i);
+    }
+
+    fasterKServers = FasterKServers({{0, 2,  1},
+                            {0, 3,  1},
+                            {2, 4,  1},
+                            {2, 5,  1},
+                            {4, 8,  1},
+                            {4, 9,  1},
+                            {8, 10, 1},
+                            {9, 11, 1},
+                            {9, 12, 1},
+                            {3, 6,  1},
+                            {3, 7,  1},
+                            {6, 13, 1},
+                            {7, 14, 1},
+                            {7, 1,  1}},
+                           {13, 14});
+
+    assert(fasterKServers.serve(7) == 1);
+    assert(fasterKServers.positions[1] == 7);
+    assert(fasterKServers.serve(14) == 1);
+    assert(fasterKServers.serve(3) == 0);
+    watch(fasterKServers.positions[1]);
+    assert(fasterKServers.positions[0] == 3);
+    assert(fasterKServers.positions[1] == 7);
+    cout << "test_faster completed succesfully" << endl;
 }
 
 void sample_testing() {
@@ -791,6 +940,8 @@ void sample_testing() {
     test_coloring();
     test_moving();
     test_kservers();
+    test_naive();
+    test_faster();
 }
 
 void stress_testing() {
@@ -812,7 +963,7 @@ void stress_testing() {
         random_shuffle(servers.begin(), servers.end());
         servers.resize(k);
 
-        Naive naive(edgs, servers);
+        FasterKServers fasterKServers(edgs, servers);
         KServers kServers(edgs, servers);
 
         int q = 1 + rand() % 100;
@@ -820,8 +971,8 @@ void stress_testing() {
 //            watch(cnt);
 //            watch(it);
             int query = rand() % n;
-            assert(naive.serve(query) == kServers.serve(query));
-            assert(naive.positions == kServers.positions);
+            assert(fasterKServers.serve(query) == kServers.serve(query));
+            assert(fasterKServers.positions == kServers.positions);
         }
     }
 }
@@ -831,4 +982,3 @@ int main() {
     stress_testing();
 }
 
-// TODO: usual auxiliary tree than dfs from query -> u have your pretty aux tree
