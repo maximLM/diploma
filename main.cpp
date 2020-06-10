@@ -5,7 +5,6 @@
 using namespace std;
 
 
-
 typedef long long ll;
 typedef pair<int, int> pii;
 
@@ -302,7 +301,24 @@ struct ColoringHLD : HLD {
     }
 };
 
-struct MovingHLD : HLD {
+struct MovingInterface {
+    virtual int move(int from, int to, ll dst) {
+        assert(0);
+        return -1;
+    }
+    virtual ll get_dist(int u, int v) {
+        assert(0);
+        return -1;
+    }
+    virtual int lca(int u, int v) {
+        assert(0);
+        return -1;
+    }
+
+    virtual ~MovingInterface() {}
+};
+
+struct MovingHLD : HLD, MovingInterface {
 
 
     MovingHLD() : HLD() {}
@@ -384,12 +400,20 @@ struct MovingHLD : HLD {
         return ret;
     }
 
-    int move_by_dist(int from, int to, ll dst) {
-        int par = lca(from, to);
+    int move(int from, int to, ll dst) {
+        int par = HLD::lca(from, to);
         int ans = move_up(from, par, dst);
         if (ans == par)
             ans = move_down(par, to, dst);
         return ans;
+    }
+
+    int lca(int u, int v) {
+        return HLD::lca(u, v);
+    }
+
+    ll get_dist(int u, int v) {
+        return HLD::get_dist(u, v);
     }
 
 };
@@ -425,7 +449,7 @@ struct KServers {
             int v = positions[servers[i]];
             pii br = coloringHld.find_color(v, query);
             br.second--;
-            int u = movingHld.move_by_dist(v, query, coloringHld.get_dist(br.first, br.second));
+            int u = movingHld.move(v, query, coloringHld.get_dist(br.first, br.second));
             coloringHld.color(u, v, v + 1);
             positions[servers[i]] = u;
         }
@@ -503,7 +527,7 @@ struct Naive {
 };
 
 struct FasterKServers {
-    MovingHLD movingHld;
+    MovingInterface * movingInstance;
     Tree tree;
     vector<int> positions, tin, tout, server;
     vector<vector<int>> g;
@@ -527,9 +551,11 @@ struct FasterKServers {
 
     FasterKServers(vector<Edge> edges, vector<int> positions) {
         tree = Tree(edges);
-        movingHld = MovingHLD(tree);
         this->positions = positions;
         n = tree.n;
+
+        MovingHLD * tmp = new MovingHLD(tree);
+        movingInstance = tmp;
 
         dist.resize(n);
         tin.resize(n);
@@ -539,6 +565,11 @@ struct FasterKServers {
         server.resize(n, -1);
 
         dfs(0);
+    }
+
+    void setMovingInstance(MovingInterface * moving) {
+        delete movingInstance;
+        movingInstance = moving;
     }
 
     bool is_parent(int u, int v) {
@@ -551,10 +582,10 @@ struct FasterKServers {
         }
         vector<int> verts = positions;
         verts.push_back(query);
-        auto cmp_less = [&] (int v1, int v2) -> bool {
+        auto cmp_less = [&](int v1, int v2) -> bool {
             return tin[v1] < tin[v2];
         };
-        auto cmp_equal = [&] (int v1, int v2) -> bool {
+        auto cmp_equal = [&](int v1, int v2) -> bool {
             return tin[v1] == tin[v2];
         };
         sort(verts.begin(), verts.end(), cmp_less);
@@ -562,7 +593,7 @@ struct FasterKServers {
 
         vector<int> tmp = verts;
         for (int i = 1; i < verts.size(); ++i) {
-            tmp.push_back(movingHld.lca(verts[i - 1], verts[i]));
+            tmp.push_back(movingInstance->lca(verts[i - 1], verts[i]));
         }
 
         verts = tmp;
@@ -578,7 +609,7 @@ struct FasterKServers {
             }
             if (!stack.empty()) {
                 g[stack.back()].push_back(edges.size());
-                ll len = movingHld.get_dist(stack.back(), v);
+                ll len = movingInstance->get_dist(stack.back(), v);
                 edges.push_back({stack.back(), v, len});
                 g[v].push_back(edges.size());
                 edges.push_back({v, stack.back(), len});
@@ -587,7 +618,7 @@ struct FasterKServers {
         }
 
         auto dfs = function<void(int, int)>();
-        dfs = [&] (int v, int par) -> void {
+        dfs = [&](int v, int par) -> void {
             closest[v] = {oo, oo};
             for (int id : g[v]) {
                 int to = edges[id].to;
@@ -615,7 +646,7 @@ struct FasterKServers {
                     cur_server = closest[v].second;
                     if (v != query) {
                         dst -= closest[v].first - dist[v];
-                        positions[cur_server] = movingHld.move_by_dist(v, query, dst);
+                        positions[cur_server] = movingInstance->move(v, query, dst);
                     } else {
                         positions[cur_server] = v;
                     }
@@ -640,7 +671,133 @@ struct FasterKServers {
         return ret;
     }
 
+    ~FasterKServers() {
+        delete movingInstance;
+    }
 
+};
+
+struct BinaryLifting {
+    Tree tree;
+    vector<vector<int>> up;
+    vector<vector<ll>> dist;
+    int n, LOG;
+
+    int get_height(int v, int par = -1) {
+        int ret = 0;
+        for (int id : tree.g[v]) {
+            int to = tree.edges[id].to;
+            if (to == par)
+                continue;
+            ret = max(ret, 1 + get_height(to, v));
+        }
+        return ret;
+    }
+
+    void pre_dfs(int v, int par = -1) {
+        for (int i = 1; i < LOG; ++i) {
+            up[v][i] = up[up[v][i - 1]][i - 1];
+            dist[v][i] = dist[v][i - 1] + dist[up[v][i - 1]][i - 1];
+        }
+        for (int id : tree.g[v]) {
+            int to = tree.edges[id].to;
+            if (to == par)
+                continue;
+            up[to][0] = v;
+            dist[v][0] = tree.edges[id].weight;
+            pre_dfs(to, v);
+        }
+    }
+
+    int jump(int v, ll dst) {
+        for (int i = LOG - 1; i >= 0; --i) {
+            if (dist[v][i] <= dst) {
+                dst -= dist[v][i];
+                v = up[v][i];
+            }
+        }
+        return v;
+    }
+
+    BinaryLifting(Tree t) {
+        tree = t;
+        n = tree.n;
+        LOG = log2(get_height(0)) + 2;
+        up.resize(n, vector<int>(LOG, 0));
+        dist.resize(n, vector<ll>(LOG, 0));
+
+        pre_dfs(0);
+    }
+
+    BinaryLifting() { }
+};
+
+struct FastMoving : MovingInterface {
+    Tree tree, hld_tree;
+    BinaryLifting lifting;
+    HLD hld;
+    int n;
+
+    void build_hld_tree() {
+        vector<Edge> edgs;
+        for (int v = 1; v < n; ++v) {
+            if (hld.high[hld.way[v]] == v) {
+                int u = hld.high[hld.way[tree.parent[v]]];
+                edgs.push_back({u, v, hld.get_dist(u, v)});
+            }
+        }
+        while (edgs.size() < n)
+            edgs.push_back({n, n});
+        hld_tree = Tree(edgs);
+        lifting = BinaryLifting(hld_tree);
+    }
+
+    FastMoving(Tree t) {
+        tree = Tree(t);
+        hld = HLD(tree);
+        n = tree.n;
+        build_hld_tree();
+    }
+
+    int move(int from, int to, ll dst) {
+        int par = hld.lca(from, to);
+        int d = hld.get_dist(from, par);
+        if (d < dst) {
+            dst -= d;
+            dst = dst - hld.get_dist(to, par);
+            from = to;
+        }
+        int v = from;
+        d = hld.get_dist(hld.high[hld.way[v]], v);
+        if (d <= dst) {
+            dst -= d;
+            v = hld.high[hld.way[v]];
+            int u = lifting.jump(v, dst);
+            dst -= hld.get_dist(v, u);
+            v = u;
+        }
+        if (dst != 0 && v != 0) {
+            v = tree.parent[v];
+            dst--;
+        }
+        v = hld.anti_ind[hld.lf[hld.way[v]] + hld.ind[v] + dst];
+        return v;
+    }
+
+    ll get_dist(int u, int v) {
+        return hld.get_dist(u, v);
+    }
+
+    int lca(int u, int v) {
+        return hld.lca(u, v);
+    }
+};
+
+struct FastestKServers : FasterKServers{
+    FastestKServers(vector<Edge> edgs, vector<int> positions): FasterKServers(edgs, positions) {
+        FastMoving * tmp = new FastMoving(tree);
+        setMovingInstance(tmp);
+    }
 };
 
 void test_segment_tree() {
@@ -753,12 +910,13 @@ void test_moving() {
                {6, 13, 1},
                {7, 14, 1},
                {7, 1,  1}});
-    MovingHLD hld(tree);
+    MovingHLD * kek = new MovingHLD(tree);
+    MovingInterface * hld = kek;
 
-    assert(hld.move_by_dist(0, 1, 1) == 3);
-    assert(hld.move_by_dist(5, 11, 3) == 9);
-    assert(hld.move_by_dist(8, 6, 2) == 2);
-    assert(hld.move_by_dist(14, 14, 0) == 14);
+    assert(hld->move(0, 1, 1) == 3);
+    assert(hld->move(5, 11, 3) == 9);
+    assert(hld->move(8, 6, 2) == 2);
+    assert(hld->move(14, 14, 0) == 14);
 
     tree = Tree({{0, 2,  2},
                  {0, 3,  2},
@@ -774,14 +932,15 @@ void test_moving() {
                  {6, 13, 2},
                  {7, 14, 2},
                  {7, 1,  2}});
-    hld = MovingHLD(tree);
+    kek = new MovingHLD(tree);
+    hld = kek;
 
-    assert(hld.move_by_dist(8, 12, 4) == 9);
-    assert(hld.move_by_dist(8, 12, 3) == 4);
-    assert(hld.move_by_dist(2, 10, 5) == 8);
-    assert(hld.move_by_dist(12, 14, 9) == 0);
-    assert(hld.move_by_dist(12, 14, 11) == 3);
-    assert(hld.move_by_dist(12, 14, 13) == 7);
+    assert(hld->move(8, 12, 4) == 9);
+    assert(hld->move(8, 12, 3) == 4);
+    assert(hld->move(2, 10, 5) == 8);
+    assert(hld->move(12, 14, 9) == 0);
+    assert(hld->move(12, 14, 11) == 3);
+    assert(hld->move(12, 14, 13) == 7);
 
 
     cout << "test_moving completed succesfully" << endl;
@@ -887,7 +1046,7 @@ void test_naive() {
 
 void test_faster() {
 
-    FasterKServers fasterKServers({{0, 2,  1},
+    FasterKServers * fasterKServers = new FasterKServers({{0, 2,  1},
                                    {0, 3,  1},
                                    {2, 4,  1},
                                    {2, 5,  1},
@@ -904,34 +1063,35 @@ void test_faster() {
                                   {0});
 
     for (int i = 0; i < 15; ++i) {
-        fasterKServers.serve(i);
-        assert(fasterKServers.positions[0] == i);
+        fasterKServers->serve(i);
+        assert(fasterKServers->positions[0] == i);
     }
+    delete fasterKServers;
+    fasterKServers = new FasterKServers({{0, 2,  1},
+                                     {0, 3,  1},
+                                     {2, 4,  1},
+                                     {2, 5,  1},
+                                     {4, 8,  1},
+                                     {4, 9,  1},
+                                     {8, 10, 1},
+                                     {9, 11, 1},
+                                     {9, 12, 1},
+                                     {3, 6,  1},
+                                     {3, 7,  1},
+                                     {6, 13, 1},
+                                     {7, 14, 1},
+                                     {7, 1,  1}},
+                                    {13, 14});
 
-    fasterKServers = FasterKServers({{0, 2,  1},
-                            {0, 3,  1},
-                            {2, 4,  1},
-                            {2, 5,  1},
-                            {4, 8,  1},
-                            {4, 9,  1},
-                            {8, 10, 1},
-                            {9, 11, 1},
-                            {9, 12, 1},
-                            {3, 6,  1},
-                            {3, 7,  1},
-                            {6, 13, 1},
-                            {7, 14, 1},
-                            {7, 1,  1}},
-                           {13, 14});
-
-    assert(fasterKServers.serve(7) == 1);
-    assert(fasterKServers.positions[1] == 7);
-    assert(fasterKServers.serve(14) == 1);
-    assert(fasterKServers.serve(3) == 0);
-    watch(fasterKServers.positions[1]);
-    assert(fasterKServers.positions[0] == 3);
-    assert(fasterKServers.positions[1] == 7);
+    assert(fasterKServers->serve(7) == 1);
+    assert(fasterKServers->positions[1] == 7);
+    assert(fasterKServers->serve(14) == 1);
+    assert(fasterKServers->serve(3) == 0);
+    watch(fasterKServers->positions[1]);
+    assert(fasterKServers->positions[0] == 3);
+    assert(fasterKServers->positions[1] == 7);
     cout << "test_faster completed succesfully" << endl;
+    delete fasterKServers;
 }
 
 void sample_testing() {
@@ -945,6 +1105,7 @@ void sample_testing() {
 }
 
 void stress_testing() {
+    srand(time(0));
     int cnt = -1;
     while (true) {
         if (++cnt % 100 == 0)
@@ -953,7 +1114,7 @@ void stress_testing() {
         vector<Edge> edgs;
         for (int i = 1; i < n; ++i) {
             int par = rand() % i;
-            edgs.push_back({par, i, 1 + rand() % 100});
+            edgs.push_back({par, i, 1 + rand() % 1}); // usually 100
         }
         int k = 2 + rand() % (n - 1);
         vector<int> servers(n);
@@ -963,7 +1124,7 @@ void stress_testing() {
         random_shuffle(servers.begin(), servers.end());
         servers.resize(k);
 
-        FasterKServers fasterKServers(edgs, servers);
+        FastestKServers fasterKServers(edgs, servers);
         KServers kServers(edgs, servers);
 
         int q = 1 + rand() % 100;
@@ -976,7 +1137,7 @@ void stress_testing() {
         }
     }
 }
-
+// TODO make O(1) LCA
 int main() {
 //    sample_testing();
     stress_testing();
