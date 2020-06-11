@@ -677,6 +677,7 @@ struct FasterKServers {
 
 };
 
+
 struct BinaryLifting {
     Tree tree;
     vector<vector<int>> up;
@@ -704,7 +705,7 @@ struct BinaryLifting {
             if (to == par)
                 continue;
             up[to][0] = v;
-            dist[v][0] = tree.edges[id].weight;
+            dist[to][0] = tree.edges[id].weight;
             pre_dfs(to, v);
         }
     }
@@ -722,7 +723,7 @@ struct BinaryLifting {
     BinaryLifting(Tree t) {
         tree = t;
         n = tree.n;
-        LOG = log2(get_height(0)) + 2;
+        LOG = log2(get_height(0) + 1) + 2;
         up.resize(n, vector<int>(LOG, 0));
         dist.resize(n, vector<ll>(LOG, 0));
 
@@ -764,7 +765,7 @@ struct FastMoving : MovingInterface {
         int d = hld.get_dist(from, par);
         if (d < dst) {
             dst -= d;
-            dst = dst - hld.get_dist(to, par);
+            dst = hld.get_dist(to, par) - dst;
             from = to;
         }
         int v = from;
@@ -775,13 +776,15 @@ struct FastMoving : MovingInterface {
             int u = lifting.jump(v, dst);
             dst -= hld.get_dist(v, u);
             v = u;
+            if (dst != 0 && v != 0) {
+                v = tree.parent[v];
+                dst--;
+            }
         }
-        if (dst != 0 && v != 0) {
-            v = tree.parent[v];
-            dst--;
-        }
+
         v = hld.anti_ind[hld.lf[hld.way[v]] + hld.ind[v] + dst];
         return v;
+
     }
 
     ll get_dist(int u, int v) {
@@ -910,8 +913,9 @@ void test_moving() {
                {6, 13, 1},
                {7, 14, 1},
                {7, 1,  1}});
-    MovingHLD * kek = new MovingHLD(tree);
+    FastMoving * kek = new FastMoving(tree);
     MovingInterface * hld = kek;
+    assert(hld->move(6, 0, 1) == 3);
 
     assert(hld->move(0, 1, 1) == 3);
     assert(hld->move(5, 11, 3) == 9);
@@ -932,8 +936,8 @@ void test_moving() {
                  {6, 13, 2},
                  {7, 14, 2},
                  {7, 1,  2}});
-    kek = new MovingHLD(tree);
-    hld = kek;
+    MovingHLD * kek2 = new MovingHLD(tree);
+    hld = kek2;
 
     assert(hld->move(8, 12, 4) == 9);
     assert(hld->move(8, 12, 3) == 4);
@@ -1108,8 +1112,9 @@ void stress_testing() {
     srand(time(0));
     int cnt = -1;
     while (true) {
-        if (++cnt % 100 == 0)
+        if (++cnt % 1 == 0) {
             watch(cnt);
+        }
         int n = 2 + rand() % 100;
         vector<Edge> edgs;
         for (int i = 1; i < n; ++i) {
@@ -1124,7 +1129,7 @@ void stress_testing() {
         random_shuffle(servers.begin(), servers.end());
         servers.resize(k);
 
-        FastestKServers fasterKServers(edgs, servers);
+        FastestKServers fastestKServers(edgs, servers);
         KServers kServers(edgs, servers);
 
         int q = 1 + rand() % 100;
@@ -1132,8 +1137,8 @@ void stress_testing() {
 //            watch(cnt);
 //            watch(it);
             int query = rand() % n;
-            assert(fasterKServers.serve(query) == kServers.serve(query));
-            assert(fasterKServers.positions == kServers.positions);
+            assert(fastestKServers.serve(query) == kServers.serve(query));
+            assert(fastestKServers.positions == kServers.positions);
         }
     }
 }
