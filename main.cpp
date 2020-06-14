@@ -1242,12 +1242,11 @@ void stress_testing() {
 
 void benchmark() {
     srand(time(0));
-    int k = 100;
-    int n = 100000;
+    int k = 20;
     freopen("output.txt", "w", stdout);
 
-    for (int k = 20; k <= 40; k += 20) {
-        cerr << k << " / 1000" << endl;
+    for (int n = 20; n <= 100000; n += 50) {
+        cerr << int((double)n / 100000 * 100) << "%" << endl;
         vector<Edge> edgs;
         for (int i = 1; i < n; ++i) {
             int par = rand() % i;
