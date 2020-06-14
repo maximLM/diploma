@@ -1242,10 +1242,12 @@ void stress_testing() {
 
 void benchmark() {
     srand(time(0));
-    int k = 20;
+    int k = 100;
+    int n = 100000;
     freopen("output.txt", "w", stdout);
-    for (int n = 100000; n <= 100000; n += 1000) {
 
+    for (int k = 20; k <= 40; k += 20) {
+        cerr << k << " / 1000" << endl;
         vector<Edge> edgs;
         for (int i = 1; i < n; ++i) {
             int par = rand() % i;
@@ -1263,7 +1265,7 @@ void benchmark() {
         FasterKServers fasterKServers(edgs, servers);
         FastestKServers fastestKServers(edgs, servers);
 
-        int q = 100;
+        int q = 10;
         vector<double> finalTimes(4);
         for (int it = 0; it < q; ++it) {
             int v = rand() % n;
@@ -1303,7 +1305,7 @@ void benchmark() {
 
 int main() {
 //    sample_testing();
-    stress_testing();
-//    benchmark();
+//    stress_testing();
+    benchmark();
 }
 
