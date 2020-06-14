@@ -790,16 +790,6 @@ struct BinaryLifting {
         }
     }
 
-    int jump(int v, ll dst) {
-        for (int i = LOG - 1; i >= 0; --i) {
-            if (dist[v][i] <= dst) {
-                dst -= dist[v][i];
-                v = up[v][i];
-            }
-        }
-        return v;
-    }
-
     BinaryLifting(Tree t) {
         tree = t;
         n = tree.n;
@@ -813,31 +803,69 @@ struct BinaryLifting {
     BinaryLifting() { }
 };
 
-struct FastMoving : MovingInterface {
-    Tree tree, hld_tree;
-    BinaryLifting lifting;
-    HLD hld;
+struct LadderDecomposition {
+    Tree tree;
+    vector<int> way;
+    vector<vector<int>> verts;
+    vector<int> height;
+    vector<int> ind;
     int n;
 
-    void build_hld_tree() {
-        vector<Edge> edgs;
-        for (int v = 1; v < n; ++v) {
-            if (hld.high[hld.way[v]] == v) {
-                int u = hld.high[hld.way[tree.parent[v]]];
-                edgs.push_back({u, v, hld.get_dist(u, v)});
+    void dfs(int v, int par = -1) {
+        int mx = -1;
+        for (int id : tree.g[v]) {
+            int to = tree.edges[id].to;
+            if (to == par)
+                continue;
+            dfs(to, v);
+            if (height[to] + 1 > height[v]) {
+                height[v] = height[to] + 1;
+                mx = to;
             }
         }
-        while (edgs.size() < n)
-            edgs.push_back({n, n});
-        hld_tree = Tree(edgs);
-        lifting = BinaryLifting(hld_tree);
+        if (mx == -1) {
+            way[v] = verts.size();
+            verts.push_back({});
+        } else {
+            way[v] = way[mx];
+        }
+        ind[v] = verts[way[v]].size();
+        verts[way[v]].push_back(v);
     }
 
-    FastMoving(Tree t) {
+    LadderDecomposition(Tree t) {
+        tree = t;
+        n = tree.n;
+        way.resize(n);
+        height.resize(n, 0);
+        ind.resize(n);
+
+        dfs(0);
+        for (int w = 0; w < verts.size(); ++w) {
+            int h = verts[w].size();
+            int v = verts[w].back();
+            while (h-- || true) {
+                if (v == 0)
+                    break;
+                v = tree.parent[v];
+                verts[w].push_back(v);
+            }
+        }
+    }
+};
+
+struct FastMoving : MovingInterface {
+    Tree tree;
+    BinaryLifting lifting;
+    HLD hld;
+    LadderDecomposition ladderDecomposition;
+    int n;
+
+    FastMoving(Tree t): ladderDecomposition(t) {
         tree = Tree(t);
         hld = HLD(tree);
         n = tree.n;
-        build_hld_tree();
+        lifting = BinaryLifting(tree);
     }
 
     int move(int from, int to, ll dst) {
@@ -849,22 +877,12 @@ struct FastMoving : MovingInterface {
             from = to;
         }
         int v = from;
-        d = hld.get_dist(hld.high[hld.way[v]], v);
-        if (d <= dst) {
-            dst -= d;
-            v = hld.high[hld.way[v]];
-            int u = lifting.jump(v, dst);
-            dst -= hld.get_dist(v, u);
-            v = u;
-            if (dst != 0 && v != 0) {
-                v = tree.parent[v];
-                dst--;
-            }
-        }
-
-        v = hld.anti_ind[hld.lf[hld.way[v]] + hld.ind[v] + dst];
-        return v;
-
+        if (!dst)
+            return v;
+        int j = hld.fastLca.lg2[dst];
+        v = lifting.up[v][j];
+        dst -= 1 << j;
+        return ladderDecomposition.verts[ladderDecomposition.way[v]][ladderDecomposition.ind[v] + dst];
     }
 
     ll get_dist(int u, int v) {
@@ -1189,7 +1207,6 @@ void sample_testing() {
 }
 
 void stress_testing() {
-    srand(time(0));
     int cnt = -1;
     while (true) {
         if (++cnt % 100 == 0) {
@@ -1223,9 +1240,70 @@ void stress_testing() {
     }
 }
 
+void benchmark() {
+    srand(time(0));
+    int k = 20;
+    freopen("output.txt", "w", stdout);
+    for (int n = 100000; n <= 100000; n += 1000) {
+
+        vector<Edge> edgs;
+        for (int i = 1; i < n; ++i) {
+            int par = rand() % i;
+            edgs.push_back({par, i, 1 + rand() % 1}); // usually 100
+        }
+        vector<int> servers(n);
+        for (int i = 0; i < n; ++i) {
+            servers[i] = i;
+        }
+        random_shuffle(servers.begin(), servers.end());
+        servers.resize(k);
+
+        Naive naive(edgs, servers);
+        KServers kservers(edgs, servers);
+        FasterKServers fasterKServers(edgs, servers);
+        FastestKServers fastestKServers(edgs, servers);
+
+        int q = 100;
+        vector<double> finalTimes(4);
+        for (int it = 0; it < q; ++it) {
+            int v = rand() % n;
+            vector<double> tms;
+            clock_t start;
+            start = clock();
+            naive.serve(v);
+            tms.push_back(double(clock() - start) / CLOCKS_PER_SEC);
+
+
+            start = clock();
+            kservers.serve(v);
+            tms.push_back(double(clock() - start) / CLOCKS_PER_SEC);
+
+
+            start = clock();
+            fasterKServers.serve(v);
+            tms.push_back(double(clock() - start) / CLOCKS_PER_SEC);
+
+
+            start = clock();
+            fastestKServers.serve(v);
+            tms.push_back(double(clock() - start) / CLOCKS_PER_SEC);
+
+            for (int i = 0; i < tms.size(); ++i) {
+                finalTimes[i] += tms[i];
+            }
+        }
+        cout << n << ' ' << k << ' ';
+        for (auto & x : finalTimes) {
+            x /= q;
+            cout << x << ' ';
+        }
+        cout << '\n';
+    }
+}
+
 int main() {
 //    sample_testing();
-//    stress_testing();
-
+    stress_testing();
+//    benchmark();
 }
 
