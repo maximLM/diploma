@@ -138,8 +138,85 @@ public:
 
 };
 
+struct FastLCA{
+    Tree tree;
+    int n;
+    int lg;
+    vector<int> tin, antin;
+    vector<vector<int>> SP;
+    vector<int> posl, posr;
+    vector<int> ord;
+    int timer = 0;
+    vector<int> lg2;
+
+    void dfs(int v, int par = -1) {
+        tin[v] = timer++;
+        antin[tin[v]] = v;
+        posr[v] = posl[v] = ord.size();
+        ord.push_back(tin[v]);
+
+        for (int id : tree.g[v]) {
+            int to = tree.edges[id].to;
+            if (to == par)
+                continue;
+            dfs(to, v);
+            posr[v] = ord.size();
+            ord.push_back(tin[v]);
+        }
+    }
+
+    FastLCA() { }
+
+    FastLCA(Tree t) {
+        tree = t;
+        n = tree.n;
+        tin.resize(n);
+        antin.resize(n);
+        lg = log2(n) + 2;
+        posl.resize(n);
+        posr.resize(n);
+
+        dfs(0);
+
+        SP.resize(lg, vector<int> (ord.size(), oo));
+
+        SP[0] = ord;
+
+        for (int j = 1; j < lg; ++j) {
+            for (int i = 0; i < ord.size(); ++i) {
+                SP[j][i] = SP[j - 1][i];
+                int l = i + (1 << j - 1);
+                if (l < ord.size())
+                    SP[j][i] = min(SP[j][i], SP[j - 1][l]);
+            }
+        }
+        lg2.resize(ord.size() + 1);
+        int j = 0;
+        lg2[0] = j;
+        for (int i = 1; i < ord.size() + 1; ++i) {
+            while ((1 << j) <= i)
+                ++j;
+            --j;
+            lg2[i] = j;
+        }
+
+    }
+
+    int lca(int u, int v) {
+        if (tin[u] > tin[v])
+            swap(u, v);
+        int l = posl[u];
+        int r = posr[v];
+        int len = r - l + 1;
+        int j = lg2[len];
+        int tim = min(SP[j][l], SP[j][r - (1 << j) + 1]);
+        return antin[tim];
+    }
+};
+
 struct HLD {
     Tree tree;
+    FastLCA fastLca;
     int n, szway = 0, sztree = 0;
     vector<int> way, lf, rf, ind, high, depth, anti_ind;
     vector<ll> dist;
@@ -206,6 +283,7 @@ struct HLD {
 
     HLD(Tree t) {
         tree = t;
+        fastLca = FastLCA(tree);
         n = t.n;
         way.resize(n, 0);
         lf.resize(n, 0);
@@ -228,7 +306,10 @@ struct HLD {
                 swap(u, v);
             v = tree.parent[high[way[v]]];
         }
-        return depth[u] > depth[v] ? v : u;
+        int ret = depth[u] > depth[v] ? v : u;
+        int new_ret = fastLca.lca(v, u);
+
+        return new_ret;
     }
 
     ll get_dist(int u, int v) {
@@ -677,7 +758,6 @@ struct FasterKServers {
 
 };
 
-
 struct BinaryLifting {
     Tree tree;
     vector<vector<int>> up;
@@ -1112,7 +1192,7 @@ void stress_testing() {
     srand(time(0));
     int cnt = -1;
     while (true) {
-        if (++cnt % 1 == 0) {
+        if (++cnt % 100 == 0) {
             watch(cnt);
         }
         int n = 2 + rand() % 100;
@@ -1130,21 +1210,22 @@ void stress_testing() {
         servers.resize(k);
 
         FastestKServers fastestKServers(edgs, servers);
-        KServers kServers(edgs, servers);
+        Naive naive(edgs, servers);
 
         int q = 1 + rand() % 100;
         for (int it = 0; it < q; ++it) {
 //            watch(cnt);
 //            watch(it);
             int query = rand() % n;
-            assert(fastestKServers.serve(query) == kServers.serve(query));
-            assert(fastestKServers.positions == kServers.positions);
+            assert(fastestKServers.serve(query) == naive.serve(query));
+            assert(fastestKServers.positions == naive.positions);
         }
     }
 }
-// TODO make O(1) LCA
+
 int main() {
 //    sample_testing();
-    stress_testing();
+//    stress_testing();
+
 }
 
