@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(Diploma)
+
+set(CMAKE_CXX_STANDARD 20)
+
+add_executable(Diploma main.cpp src/structures/Tree.cpp includes/structures/Tree.h src/structures/Edge.cpp includes/structures/Edge.h src/structures/SegmentTree.cpp includes/structures/SegmentTree.h src/structures/FastLCA.cpp includes/structures/FastLCA.h src/structures/HLD.cpp includes/structures/HLD.h src/structures/ColoringHLD.cpp includes/structures/ColoringHLD.h src/structures/MovingInterface.cpp includes/structures/MovingInterface.h src/structures/MovingHLD.cpp includes/structures/MovingHLD.h src/structures/BinaryLifting.cpp includes/structures/BinaryLifting.h src/structures/LadderDecomposition.cpp includes/structures/LadderDecomposition.h includes/KserverInterface.h includes/Naive.h src/Naive.cpp src/KserverInterface.cpp src/structures/FastMoving.cpp includes/structures/FastMoving.h src/FirstSolution.cpp includes/FirstSolution.h src/SecondSolution.cpp includes/SecondSolution.h src/ThirdSolution.cpp includes/ThirdSolution.h)
