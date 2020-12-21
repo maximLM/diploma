@@ -7,7 +7,7 @@
 #include "includes/structures/FastMoving.h"
 
 #define watch(x) cout << (#x) << " = " << (x) << endl;
-
+// comment
 using namespace std;
 
 
